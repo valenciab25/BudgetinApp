@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'add_transaction_page.dart';
 
 class AddIncomeScreen extends StatelessWidget {
   const AddIncomeScreen({super.key});
@@ -16,12 +17,14 @@ class AddIncomeScreen extends StatelessWidget {
               child: Row(
                 children: [
                   GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: const Icon(Icons.arrow_back,
-                          color: Colors.white)),
+                    onTap: () => Navigator.pop(context),
+                    child: const Icon(Icons.arrow_back, color: Colors.white),
+                  ),
                   const SizedBox(width: 15),
-                  const Text("Add Income",
-                      style: TextStyle(color: Colors.white, fontSize: 20)),
+                  const Text(
+                    "Add Income",
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
                 ],
               ),
             ),
@@ -30,8 +33,7 @@ class AddIncomeScreen extends StatelessWidget {
               child: Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(50)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(50)),
                 ),
                 child: ListView(
                   padding: const EdgeInsets.all(20),
@@ -66,10 +68,26 @@ class CategoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       leading: CircleAvatar(
-          radius: 22,
-          backgroundColor: Colors.blue.shade50,
-          child: Icon(icon, color: Colors.blue)),
+        radius: 22,
+        backgroundColor: Colors.blue.shade50,
+        child: Icon(icon, color: Colors.blue),
+      ),
       title: Text(title),
+      onTap: () async {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AddTransactionPage(
+              category: title,
+              type: "income", // PENTING: ini penanda income
+            ),
+          ),
+        );
+
+        if (result == true) {
+          Navigator.pop(context, true); // refresh halaman sebelumnya
+        }
+      },
     );
   }
 }

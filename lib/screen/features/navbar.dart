@@ -22,9 +22,9 @@ class _NavbarState extends State<Navbar> {
   final List<Widget> _screens = const [
     HomeScreen(),      // 0: Home
     StatisticScreen(), // 1: Statistik
-    // TransactionScreen(), // 2: Transaksi (FAB)
-    // WishesScreen(),    // 3: Love/Wishes
-    ProfileScreen(),   // 4: Profile
+    TransactionScreen(), // 2: Transaksi (FAB)
+    WishesScreen(),    // 3: Love/Wishes
+    // TransactionScreen(),   // 4: Profile
   ];
 
   // Map untuk memetakan navIndex BottomAppBar ke Screen Index yang sebenarnya

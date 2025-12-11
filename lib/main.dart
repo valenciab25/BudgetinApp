@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'screen/features/splash.dart';
 import 'screen/features/navbar.dart';
 import 'screen/auth/login.dart';
-import 'screen/auth/register.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,7 +25,7 @@ class MyApp extends StatelessWidget {
       title: 'BudgetIn App',
 
       // Routing
-      initialRoute: '/login',
+      initialRoute: '/home',
 
       routes: {
         '/splash': (_) => const SplashScreen(),
