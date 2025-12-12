@@ -21,9 +21,10 @@ class _NavbarState extends State<Navbar> {
   // List of screens sesuai urutan indeks
   final List<Widget> _screens = const [
     HomeScreen(),      // 0: Home
-    StatisticScreen(), // 1: Statistik
+    StatisticPage(), // 1: Statistik
     TransactionScreen(), // 2: Transaksi (FAB)
-    WishesScreen(),    // 3: Love/Wishes
+    WishesScreen(),
+    ProfileScreen()// 3: Love/Wishes
     // TransactionScreen(),   // 4: Profile
   ];
 

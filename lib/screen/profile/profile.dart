@@ -1,4 +1,8 @@
+
 import 'package:flutter/material.dart';
+import 'package:budgetin_app/screen/auth/item_list.dart';
+import 'package:budgetin_app/screen/components/menu_list.dart';
+import 'package:budgetin_app/screen/partials/color.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -6,128 +10,134 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFBFB2AE),
-      body: Column(
-        children: [
-          // Bagian atas (AppBar custom + foto profil)
-          Stack(
-            clipBehavior: Clip.none,
+      // TIPS: Beri warna latar belakang yang sama dengan ornamen atas
+      // agar transisi terlihat lebih mulus. Jika ornamen atas tidak ada,
+      // biarkan default.
+      // backgroundColor: primary,
+
+        body: SafeArea(
+          child: Column(
             children: [
-              Container(
-                height: 200,
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF3E1ED0),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(100),
-                    bottomRight: Radius.circular(100),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 40.0, left: 16),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      ),
-                      const Spacer(),
-                      const Text(
-                        'Profile',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(flex: 2),
-                    ],
-                  ),
-                ),
+              const SizedBox(
+                height: 70,
               ),
-              Positioned(
-                top: 130,
-                left: 0,
-                right: 0,
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.white,
-                  child: CircleAvatar(
-                    radius: 47,
-                    backgroundImage: AssetImage('assets/profile.jpg'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 60),
-          const Text(
-            "John Smith",
-            style: TextStyle(
-              color: Colors.black,
-              fontWeight: FontWeight.bold,
-              fontSize: 20,
-            ),
-          ),
-
-          const SizedBox(height: 30),
-
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(40),
-                  topRight: Radius.circular(40),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 30),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              // =================== HEADER ===================
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0), // Beri sedikit padding
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildMenuItem(Icons.person_outline, "Edit Profile"),
-                    _buildMenuItem(Icons.shield_outlined, "Security"),
-                    _buildMenuItem(Icons.settings_outlined, "Setting"),
-                    _buildMenuItem(Icons.help_outline, "Help"),
-                    _buildMenuItem(Icons.logout, "Logout"),
+                    IconButton(
+                      onPressed: () {
+                        // Beri fungsi untuk kembali
+                        if (Navigator.canPop(context)) {
+                          Navigator.pop(context);
+                        }
+                      },
+                      icon: const Icon(Icons.arrow_back_ios),
+                      // Warna icon header sebaiknya jangan putih jika background Scaffold putih
+                      color: Colors.black,
+                    ),
+                    const Text(
+                      'Profile',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {},
+                      icon: const Icon(Icons.edit),
+                      color: primary, // Warna ini sudah benar
+                    )
                   ],
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+              const SizedBox(
+                height: 19,
+              ),
+              // =================== KONTEN UTAMA ===================
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(30),
+                          topRight: Radius.circular(30))),
+                  child: Column(
+                    children: [
+                      const SizedBox(
+                        height: 7,
+                      ),
+                      // --- Bagian Info Profil ---
+                      Container(
+                        width: 97,
+                        height: 99,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(50),
+                        ),
+                        child: Image.asset('assets/images/john_smith.png'),
+                      ),
+                      const Text(
+                        'John Smith',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
 
-  Widget _buildMenuItem(IconData icon, String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: const BoxDecoration(
-              color: Color(0xFF3E8EF7),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: Colors.white),
+
+                      const SizedBox(
+                        height: 25,
+                      ),
+                      // =================== SOLUSI DI SINI ===================
+                      // Gunakan Expanded + SingleChildScrollView untuk area daftar menu
+                      Expanded(
+                        child: SingleChildScrollView( // <-- GANTI DARI LISTVIEW
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0), // Padding untuk menu
+                            child: Column(
+                              children: [
+                                MenuList(
+                                    title: 'Edit Profile',
+                                    image: 'assets/images/edit_profile.png'),
+                                const SizedBox(height: 10),
+                                InkWell(
+                                  onTap: () => {
+                                    Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (context) =>
+                                            const ItemListScreen()
+                                        ))
+                                  },
+                                  child: MenuList(
+                                      title: 'Security',
+                                      image: 'assets/images/security.png'),
+                                ),
+                                const SizedBox(height: 10),
+                                MenuList(
+                                    title: 'Setting',
+                                    image: 'assets/images/settings.png'),
+                                const SizedBox(height: 10),
+                                MenuList(
+                                    title: 'help', // Typo diperbaiki
+                                    image: 'assets/images/help.png'),
+                                const SizedBox(height: 10),
+                                MenuList(
+                                    title: 'logout',
+                                    image: 'assets/images/logout.png'),
+                                const SizedBox(height: 10),
+                                // Anda bisa menambahkan menu Logout di sini jika perlu
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            ],
           ),
-          const SizedBox(width: 20),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
+        ));
   }
 }
