@@ -81,7 +81,16 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     }
 
     try {
-      final now = Timestamp.now();
+      final createdDateTime = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        selectedTime.hour,
+        selectedTime.minute,
+      );
+
+      final now = Timestamp.fromDate(createdDateTime);
+
 
       // 1️⃣ SIMPAN TRANSAKSI
       await FirebaseFirestore.instance.collection('transactions').add({
@@ -95,7 +104,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         'icon': widget.icon.codePoint,
         'iconFontFamily': widget.icon.fontFamily,
         'createdAt': now,
+        'sortTime': now, // 🔥 INI KUNCINYA
       });
+
 
       // 2️⃣ BUAT NOTIFIKASI 🔔🔥
       await FirebaseFirestore.instance.collection('notifications').add({

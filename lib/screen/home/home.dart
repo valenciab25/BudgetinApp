@@ -49,9 +49,7 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ===========================
-                // HEADER
-                // ===========================
+                // ================= HEADER =================
                 SafeArea(
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -121,8 +119,7 @@ class HomeScreen extends StatelessWidget {
                               children: [
                                 const Text(
                                   'Total Expense',
-                                  style:
-                                  TextStyle(color: Colors.white70),
+                                  style: TextStyle(color: Colors.white70),
                                 ),
                                 const SizedBox(height: 5),
                                 Text(
@@ -140,8 +137,7 @@ class HomeScreen extends StatelessWidget {
                               children: [
                                 const Text(
                                   'Total Balance',
-                                  style:
-                                  TextStyle(color: Colors.white70),
+                                  style: TextStyle(color: Colors.white70),
                                 ),
                                 const SizedBox(height: 5),
                                 Text(
@@ -163,9 +159,7 @@ class HomeScreen extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                // ===========================
-                // RECENT TRANSACTIONS
-                // ===========================
+                // ================= RECENT TRANSACTIONS =================
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 20),
                   child: Text(
@@ -181,16 +175,16 @@ class HomeScreen extends StatelessWidget {
 
                 ...docs.take(8).map((doc) {
                   final data = doc.data() as Map<String, dynamic>;
+                  final bool isIncome = data['type'] == 'income';
 
-                  /// 🔥 FIX ICON DI SINI (SATU-SATUNYA PERUBAHAN)
                   IconData icon;
                   if (data['icon'] != null) {
                     icon = IconData(
                       data['icon'],
-                      fontFamily: 'MaterialIcons', // ✅ FIX
+                      fontFamily: 'MaterialIcons',
                     );
                   } else {
-                    icon = data['type'] == 'income'
+                    icon = isIncome
                         ? Icons.attach_money
                         : Icons.shopping_cart;
                   }
@@ -199,7 +193,8 @@ class HomeScreen extends StatelessWidget {
                     icon: icon,
                     title: data['category'] ?? 'Unknown',
                     amount:
-                    'Rp${currency.format(data['amount'])}',
+                    '${isIncome ? '+' : '-'}Rp${currency.format(data['amount'])}',
+                    isIncome: isIncome,
                   );
                 }).toList(),
               ],
@@ -210,13 +205,12 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // ================================
-  // TRANSACTION ITEM
-  // ================================
+  // ================= TRANSACTION ITEM =================
   static Widget _buildTransactionItem({
     required IconData icon,
     required String title,
     required String amount,
+    required bool isIncome,
   }) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
@@ -235,8 +229,12 @@ class HomeScreen extends StatelessWidget {
       child: Row(
         children: [
           CircleAvatar(
-            backgroundColor: Colors.blue.shade100,
-            child: Icon(icon, color: Colors.blue),
+            backgroundColor:
+            isIncome ? Colors.green.shade100 : Colors.red.shade100,
+            child: Icon(
+              icon,
+              color: isIncome ? Colors.green : Colors.red,
+            ),
           ),
           const SizedBox(width: 15),
           Expanded(
@@ -247,8 +245,10 @@ class HomeScreen extends StatelessWidget {
           ),
           Text(
             amount,
-            style:
-            const TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isIncome ? Colors.green : Colors.red,
+            ),
           ),
         ],
       ),
