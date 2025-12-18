@@ -1,22 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: HomeScreen(),
-    );
-  }
-}
+import 'package:budgetin_app/screen/notification/notification.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -35,6 +21,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
     final currency = NumberFormat('#,###', 'id');
 
     return Scaffold(
@@ -62,13 +49,15 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 // ===========================
-                //     HEADER
+                // HEADER
                 // ===========================
                 SafeArea(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 30,
+                    ),
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
                         colors: [Color(0xFF5338FF), Color(0xFF3C1DFF)],
@@ -83,53 +72,88 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-
                         Row(
-                          children: const [
-                            CircleAvatar(radius: 22, backgroundColor: Colors.white),
-                            SizedBox(width: 15),
+                          children: [
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Hi, Welcome Back',
-                                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                  Text('Good Morning, Ester!',
-                                      style: TextStyle(color: Colors.white70)),
+                                  const Text(
+                                    'Hi, Welcome!',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${user?.email ?? ''}',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
-                            Icon(Icons.notifications_none, color: Colors.white),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.notifications_none,
+                                color: Colors.white,
+                              ),
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                    const NotificationScreen(),
+                                  ),
+                                );
+                              },
+                            ),
                           ],
                         ),
-
-                        const SizedBox(height: 20),
-
+                        const SizedBox(height: 25),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Total Expense', style: TextStyle(color: Colors.white70)),
+                                const Text(
+                                  'Total Expense',
+                                  style:
+                                  TextStyle(color: Colors.white70),
+                                ),
                                 const SizedBox(height: 5),
                                 Text(
                                   'Rp${currency.format(expense)}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ],
                             ),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text('Total Balance', style: TextStyle(color: Colors.white70)),
+                                const Text(
+                                  'Total Balance',
+                                  style:
+                                  TextStyle(color: Colors.white70),
+                                ),
                                 const SizedBox(height: 5),
                                 Text(
                                   'Rp${currency.format(balance)}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ],
-                            )
+                            ),
                           ],
                         ),
                       ],
@@ -140,12 +164,17 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 20),
 
                 // ===========================
-                //     RECENT TRANSACTIONS
+                // RECENT TRANSACTIONS
                 // ===========================
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: Text('Recent Transactions',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Recent Transactions',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
 
                 const SizedBox(height: 10),
@@ -153,15 +182,26 @@ class HomeScreen extends StatelessWidget {
                 ...docs.take(8).map((doc) {
                   final data = doc.data() as Map<String, dynamic>;
 
-                  return _buildTransactionItem(
-                    icon: data['type'] == 'income'
+                  /// 🔥 FIX ICON DI SINI (SATU-SATUNYA PERUBAHAN)
+                  IconData icon;
+                  if (data['icon'] != null) {
+                    icon = IconData(
+                      data['icon'],
+                      fontFamily: 'MaterialIcons', // ✅ FIX
+                    );
+                  } else {
+                    icon = data['type'] == 'income'
                         ? Icons.attach_money
-                        : Icons.shopping_cart,
-                    title: data['category'],
+                        : Icons.shopping_cart;
+                  }
+
+                  return _buildTransactionItem(
+                    icon: icon,
+                    title: data['category'] ?? 'Unknown',
                     amount:
-                    '${data['type'] == 'income' ? '+' : '-'}Rp${currency.format(data['amount'])}',
+                    'Rp${currency.format(data['amount'])}',
                   );
-                }),
+                }).toList(),
               ],
             ),
           );
@@ -171,7 +211,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   // ================================
-  //     TRANSACTION ITEM
+  // TRANSACTION ITEM
   // ================================
   static Widget _buildTransactionItem({
     required IconData icon,
@@ -185,7 +225,11 @@ class HomeScreen extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
         boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 5, offset: Offset(0, 3)),
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 5,
+            offset: Offset(0, 3),
+          ),
         ],
       ),
       child: Row(
@@ -195,8 +239,17 @@ class HomeScreen extends StatelessWidget {
             child: Icon(icon, color: Colors.blue),
           ),
           const SizedBox(width: 15),
-          Expanded(child: Text(title, style: const TextStyle(fontSize: 16))),
-          Text(amount, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
+          Text(
+            amount,
+            style:
+            const TextStyle(fontWeight: FontWeight.bold),
+          ),
         ],
       ),
     );

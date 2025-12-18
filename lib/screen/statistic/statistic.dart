@@ -1,3 +1,495 @@
+// import 'package:flutter/material.dart';
+// import 'package:cloud_firestore/cloud_firestore.dart';
+// import 'package:fl_chart/fl_chart.dart';
+//
+// class StatisticPage extends StatefulWidget {
+//   const StatisticPage({super.key});
+//
+//   @override
+//   State<StatisticPage> createState() => _StatisticPageState();
+// }
+//
+// class _StatisticPageState extends State<StatisticPage> {
+//   String filter = "Weekly"; // Daily | Weekly | Monthly | Year
+//   int tabIndex = 0; // 0 = Net, 1 = Spend
+//
+//   Stream<QuerySnapshot<Map<String, dynamic>>> getTransactions() {
+//     return FirebaseFirestore.instance
+//         .collection("transactions")
+//         .orderBy("createdAt", descending: false)
+//         .snapshots();
+//   }
+//
+//   double _amount(dynamic raw) {
+//     if (raw == null) return 0;
+//     if (raw is num) return raw.toDouble();
+//     return double.tryParse(raw.toString()) ?? 0;
+//   }
+//
+//   bool _isIncome(String type) => type.toLowerCase() == "income";
+//   bool _isExpense(String type) =>
+//       type.toLowerCase() == "spend" || type.toLowerCase() == "expense";
+//
+//   DateTime? _dt(Map<String, dynamic> r) {
+//     final raw = r["createdAt"];
+//     if (raw is Timestamp) return raw.toDate();
+//     return null;
+//   }
+//
+//   DateTime _refDate(List<Map<String, dynamic>> rows) {
+//     DateTime best = DateTime(2000);
+//     for (final r in rows) {
+//       final d = _dt(r);
+//       if (d != null && d.isAfter(best)) best = d;
+//     }
+//     return best.year == 2000 ? DateTime.now() : best;
+//   }
+//
+//   Map<String, double> _totals(List<Map<String, dynamic>> rows) {
+//     double income = 0, expense = 0;
+//     for (final r in rows) {
+//       final type = (r["type"] ?? "").toString();
+//       final amt = _amount(r["amount"]);
+//       if (_isIncome(type)) income += amt;
+//       if (_isExpense(type)) expense += amt;
+//     }
+//     return {
+//       "income": income,
+//       "expense": expense,
+//       "balance": income - expense,
+//     };
+//   }
+//
+//   // ===== Buckets =====
+//   late List<double> netBuckets;   // income - spend
+//   late List<double> spendBuckets; // spend only
+//
+//   void _buildBuckets(List<Map<String, dynamic>> rows) {
+//     final now = _refDate(rows);
+//
+//     void addToBucket(int idx, Map<String, dynamic> r) {
+//       final amt = _amount(r["amount"]);
+//       final type = (r["type"] ?? "").toString();
+//
+//       if (_isIncome(type)) netBuckets[idx] += amt;
+//       if (_isExpense(type)) {
+//         netBuckets[idx] -= amt;
+//         spendBuckets[idx] += amt;
+//       }
+//     }
+//
+//     if (filter == "Daily") {
+//       netBuckets = List.filled(24, 0);
+//       spendBuckets = List.filled(24, 0);
+//
+//       for (final r in rows) {
+//         final dt = _dt(r);
+//         if (dt == null) continue;
+//         if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+//           addToBucket(dt.hour, r);
+//         }
+//       }
+//       return;
+//     }
+//
+//     if (filter == "Weekly") {
+//       netBuckets = List.filled(7, 0);
+//       spendBuckets = List.filled(7, 0);
+//
+//       final baseDay = DateTime(now.year, now.month, now.day);
+//       final startOfWeek = baseDay.subtract(Duration(days: baseDay.weekday - 1)); // Mon
+//       final end = startOfWeek.add(const Duration(days: 7));
+//
+//       for (final r in rows) {
+//         final dt = _dt(r);
+//         if (dt == null) continue;
+//         if (!dt.isBefore(startOfWeek) && dt.isBefore(end)) {
+//           final idx = dt.weekday - 1;
+//           addToBucket(idx, r);
+//         }
+//       }
+//       return;
+//     }
+//
+//     if (filter == "Monthly") {
+//       netBuckets = List.filled(30, 0);
+//       spendBuckets = List.filled(30, 0);
+//
+//       final start = DateTime(now.year, now.month, 1);
+//       final end = DateTime(now.year, now.month + 1, 1);
+//
+//       for (final r in rows) {
+//         final dt = _dt(r);
+//         if (dt == null) continue;
+//         if (!dt.isBefore(start) && dt.isBefore(end)) {
+//           final day = dt.day;
+//           if (day >= 1 && day <= 30) {
+//             addToBucket(day - 1, r);
+//           }
+//         }
+//       }
+//       return;
+//     }
+//
+//     netBuckets = List.filled(12, 0);
+//     spendBuckets = List.filled(12, 0);
+//
+//     final start = DateTime(now.year, 1, 1);
+//     final end = DateTime(now.year + 1, 1, 1);
+//
+//     for (final r in rows) {
+//       final dt = _dt(r);
+//       if (dt == null) continue;
+//       if (!dt.isBefore(start) && dt.isBefore(end)) {
+//         addToBucket(dt.month - 1, r);
+//       }
+//     }
+//   }
+//
+//   // ===== Chart helpers =====
+//   double _absMax(List<double> arr) {
+//     double mx = 0;
+//     for (final v in arr) {
+//       if (v.abs() > mx) mx = v.abs();
+//     }
+//     return mx <= 0 ? 10 : mx * 1.2;
+//   }
+//
+//   double _minYNet() {
+//     double mn = 0;
+//     for (final v in netBuckets) {
+//       if (v < mn) mn = v;
+//     }
+//     if (mn >= 0) return 0;
+//     return mn * 1.2;
+//   }
+//
+//   double _maxYNet() => _absMax(netBuckets);
+//   double _maxYSpend() {
+//     double mx = 0;
+//     for (final v in spendBuckets) {
+//       if (v > mx) mx = v;
+//     }
+//     return mx <= 0 ? 10 : mx * 1.2;
+//   }
+//
+//   // PERBAIKAN: Lebar chart disesuaikan layar agar Weekly tidak kecil
+//   double _chartWidth(double screenWidth) {
+//     if (filter == "Daily") return 24 * 30;
+//     if (filter == "Weekly") return screenWidth - 60; // Mengisi layar
+//     if (filter == "Monthly") return 30 * 20;
+//     return screenWidth - 60; // Year juga pas layar
+//   }
+//
+//   List<BarChartGroupData> _groups(List<double> data) {
+//     // Batang diperlebar untuk Weekly/Year agar proporsional
+//     double bWidth = (filter == "Weekly" || filter == "Year") ? 25 : 14;
+//
+//     return List.generate(data.length, (i) {
+//       return BarChartGroupData(
+//         x: i,
+//         barRods: [
+//           BarChartRodData(
+//             toY: data[i],
+//             width: bWidth,
+//             color: const Color(0xFF5338FF),
+//             borderRadius: BorderRadius.circular(4),
+//           ),
+//         ],
+//       );
+//     });
+//   }
+//
+//   Widget _bottomTitle(double value, TitleMeta meta) {
+//     final i = value.toInt();
+//
+//     if (filter == "Daily") {
+//       if (i % 3 != 0) return const SizedBox.shrink();
+//       return Text("${i}h", style: const TextStyle(fontSize: 10));
+//     }
+//
+//     if (filter == "Weekly") {
+//       const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+//       if (i < 0 || i > 6) return const SizedBox.shrink();
+//       return Text(days[i], style: const TextStyle(fontSize: 10));
+//     }
+//
+//     if (filter == "Monthly") {
+//       if ((i + 1) % 5 != 0) return const SizedBox.shrink();
+//       return Text("${i + 1}", style: const TextStyle(fontSize: 10));
+//     }
+//
+//     const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+//     if (i < 0 || i > 11) return const SizedBox.shrink();
+//     return Text(months[i], style: const TextStyle(fontSize: 10));
+//   }
+//
+//   Widget _chip(String name) {
+//     final active = filter == name;
+//     return InkWell(
+//       onTap: () => setState(() => filter = name),
+//       borderRadius: BorderRadius.circular(12),
+//       child: Container(
+//         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+//         decoration: BoxDecoration(
+//           color: active ? const Color(0xFF5338FF) : const Color(0xFFF2F3F7),
+//           borderRadius: BorderRadius.circular(12),
+//         ),
+//         child: Text(
+//           name,
+//           style: TextStyle(
+//             color: active ? Colors.white : Colors.black87,
+//             fontWeight: FontWeight.w600,
+//             fontSize: 12,
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+//
+//   Widget _tab(String text, int idx) {
+//     final active = tabIndex == idx;
+//     return Expanded(
+//       child: InkWell(
+//         onTap: () => setState(() => tabIndex = idx),
+//         borderRadius: BorderRadius.circular(12),
+//         child: Container(
+//           padding: const EdgeInsets.symmetric(vertical: 12),
+//           decoration: BoxDecoration(
+//             color: active ? const Color(0xFF5338FF) : Colors.transparent,
+//             borderRadius: BorderRadius.circular(12),
+//           ),
+//           child: Center(
+//             child: Text(
+//               text,
+//               style: TextStyle(
+//                 color: active ? Colors.white : Colors.black87,
+//                 fontWeight: FontWeight.w700,
+//               ),
+//             ),
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+//
+//   Widget _metricCard({required String title, required double value, required IconData icon}) {
+//     return Container(
+//       padding: const EdgeInsets.all(14),
+//       decoration: BoxDecoration(
+//         color: Colors.white,
+//         borderRadius: BorderRadius.circular(18),
+//         boxShadow: const [
+//           BoxShadow(blurRadius: 14, offset: Offset(0, 6), color: Color(0x12000000)),
+//         ],
+//       ),
+//       child: Row(
+//         children: [
+//           Container(
+//             width: 44,
+//             height: 44,
+//             decoration: BoxDecoration(
+//               color: const Color(0xFFF2F3F7),
+//               borderRadius: BorderRadius.circular(14),
+//             ),
+//             child: Icon(icon, color: const Color(0xFF5338FF)),
+//           ),
+//           const SizedBox(width: 12),
+//           Expanded(
+//             child: Column(
+//               crossAxisAlignment: CrossAxisAlignment.start,
+//               children: [
+//                 Text(title, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+//                 const SizedBox(height: 6),
+//                 Text(
+//                   "Rp${value.toStringAsFixed(0)}",
+//                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+//                 ),
+//               ],
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+//
+//   Widget _chartCard({
+//     required String title,
+//     required List<double> data,
+//     required double maxY,
+//     required double screenWidth,
+//     double? minY,
+//   }) {
+//     return Container(
+//       padding: const EdgeInsets.all(14),
+//       decoration: BoxDecoration(
+//         color: Colors.white,
+//         borderRadius: BorderRadius.circular(18),
+//         boxShadow: const [
+//           BoxShadow(blurRadius: 14, offset: Offset(0, 6), color: Color(0x12000000)),
+//         ],
+//       ),
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+//           const SizedBox(height: 12),
+//           SizedBox(
+//             height: 260,
+//             child: SingleChildScrollView(
+//               scrollDirection: Axis.horizontal,
+//               child: SizedBox(
+//                 width: _chartWidth(screenWidth),
+//                 child: BarChart(
+//                   BarChartData(
+//                     minY: minY,
+//                     maxY: maxY,
+//                     barGroups: _groups(data),
+//                     borderData: FlBorderData(show: false),
+//                     gridData: const FlGridData(show: true, drawVerticalLine: false),
+//                     titlesData: FlTitlesData(
+//                       topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+//                       rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+//                       leftTitles: AxisTitles(
+//                         sideTitles: SideTitles(
+//                           showTitles: true,
+//                           reservedSize: 44,
+//                           getTitlesWidget: (v, meta) =>
+//                               Text(v.toInt().toString(), style: const TextStyle(fontSize: 10)),
+//                         ),
+//                       ),
+//                       bottomTitles: AxisTitles(
+//                         sideTitles: SideTitles(
+//                           showTitles: true,
+//                           reservedSize: 28,
+//                           getTitlesWidget: _bottomTitle,
+//                         ),
+//                       ),
+//                     ),
+//                   ),
+//                 ),
+//               ),
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     // Ambil lebar layar sekali di sini
+//     final screenWidth = MediaQuery.of(context).size.width;
+//
+//     return Scaffold(
+//       backgroundColor: const Color(0xffF5F6FA),
+//       body: SafeArea(
+//         child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+//           stream: getTransactions(),
+//           builder: (context, snapshot) {
+//             if (snapshot.connectionState == ConnectionState.waiting) {
+//               return const Center(child: CircularProgressIndicator());
+//             }
+//
+//             final rows = (snapshot.data?.docs ?? []).map((d) => d.data()).toList();
+//             final totals = _totals(rows);
+//             _buildBuckets(rows);
+//
+//             return SingleChildScrollView(
+//               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+//               child: Center(
+//                 child: ConstrainedBox(
+//                   constraints: const BoxConstraints(maxWidth: 520),
+//                   child: Column(
+//                     crossAxisAlignment: CrossAxisAlignment.start,
+//                     children: [
+//                       const Text("Analysis",
+//                           style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+//                       const SizedBox(height: 14),
+//
+//                       Row(
+//                         children: [
+//                           Expanded(
+//                             child: _metricCard(
+//                               title: "Balance",
+//                               value: totals["balance"] ?? 0,
+//                               icon: Icons.account_balance_wallet,
+//                             ),
+//                           ),
+//                           const SizedBox(width: 12),
+//                           Expanded(
+//                             child: _metricCard(
+//                               title: "Spend",
+//                               value: totals["expense"] ?? 0,
+//                               icon: Icons.trending_down,
+//                             ),
+//                           ),
+//                         ],
+//                       ),
+//
+//                       const SizedBox(height: 14),
+//
+//                       Container(
+//                         padding: const EdgeInsets.all(10),
+//                         decoration: BoxDecoration(
+//                           color: Colors.white,
+//                           borderRadius: BorderRadius.circular(16),
+//                         ),
+//                         child: Row(
+//                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//                           children: [
+//                             _chip("Daily"),
+//                             _chip("Weekly"),
+//                             _chip("Monthly"),
+//                             _chip("Year"),
+//                           ],
+//                         ),
+//                       ),
+//
+//                       const SizedBox(height: 14),
+//
+//                       Container(
+//                         padding: const EdgeInsets.all(6),
+//                         decoration: BoxDecoration(
+//                           color: Colors.white,
+//                           borderRadius: BorderRadius.circular(16),
+//                         ),
+//                         child: Row(
+//                           children: [
+//                             _tab("Balance (Net)", 0),
+//                             _tab("Spend", 1),
+//                           ],
+//                         ),
+//                       ),
+//
+//                       const SizedBox(height: 16),
+//
+//                       if (tabIndex == 0)
+//                         _chartCard(
+//                           title: "Balance (Net)",
+//                           data: netBuckets,
+//                           minY: _minYNet(),
+//                           maxY: _maxYNet(),
+//                           screenWidth: screenWidth, // Oper lebar layar
+//                         )
+//                       else
+//                         _chartCard(
+//                           title: "Spend (Expense)",
+//                           data: spendBuckets,
+//                           maxY: _maxYSpend(),
+//                           screenWidth: screenWidth, // Oper lebar layar
+//                         ),
+//                     ],
+//                   ),
+//                 ),
+//               ),
+//             );
+//           },
+//         ),
+//       ),
+//     );
+//   }
+// }
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -8,30 +500,57 @@ class StatisticPage extends StatefulWidget {
 
   @override
   State<StatisticPage> createState() => _StatisticPageState();
+
+
 }
 
 class _StatisticPageState extends State<StatisticPage> {
-  String filter = "Weekly"; // default
+  final NumberFormat _rupiahFormat =
+  NumberFormat.decimalPattern('id');
 
-  // -------- GET DATA --------
-  Stream<QuerySnapshot> getTransactions() {
+  String filter = "Weekly"; // Daily | Weekly | Monthly | Year
+  int tabIndex = 0; // 0 = Net, 1 = Spend
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> getTransactions() {
     return FirebaseFirestore.instance
         .collection("transactions")
-        .orderBy("date")
+        .orderBy("createdAt", descending: false)
         .snapshots();
   }
 
-  // -------- TOTALS --------
-  Map<String, dynamic> calculateTotals(List<QueryDocumentSnapshot> docs) {
-    double income = 0, expense = 0;
+  double _amount(dynamic raw) {
+    if (raw == null) return 0;
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw.toString()) ?? 0;
+  }
 
-    for (var d in docs) {
-      double amount = double.tryParse(d["amount"].toString()) ?? 0;
+  bool _isIncome(String type) => type.toLowerCase() == "income";
+  bool _isExpense(String type) =>
+      type.toLowerCase() == "spend" || type.toLowerCase() == "expense";
 
-      if (d["type"] == "income") income += amount;
-      else expense += amount;
+  DateTime? _dt(Map<String, dynamic> r) {
+    final raw = r["createdAt"];
+    if (raw is Timestamp) return raw.toDate();
+    return null;
+  }
+
+  DateTime _refDate(List<Map<String, dynamic>> rows) {
+    DateTime best = DateTime(2000);
+    for (final r in rows) {
+      final d = _dt(r);
+      if (d != null && d.isAfter(best)) best = d;
     }
+    return best.year == 2000 ? DateTime.now() : best;
+  }
 
+  Map<String, double> _totals(List<Map<String, dynamic>> rows) {
+    double income = 0, expense = 0;
+    for (final r in rows) {
+      final type = (r["type"] ?? "").toString();
+      final amt = _amount(r["amount"]);
+      if (_isIncome(type)) income += amt;
+      if (_isExpense(type)) expense += amt;
+    }
     return {
       "income": income,
       "expense": expense,
@@ -39,658 +558,442 @@ class _StatisticPageState extends State<StatisticPage> {
     };
   }
 
-  // ---------- CHART DATA ----------
-  List<double> weeklyIncome = List.filled(7, 0);
-  List<double> weeklyExpense = List.filled(7, 0);
+  // ===== Buckets =====
+  late List<double> netBuckets;   // income - spend
+  late List<double> spendBuckets; // spend only
 
-  List<double> monthlyIncome = List.filled(31, 0);
-  List<double> monthlyExpense = List.filled(31, 0);
+  void _buildBuckets(List<Map<String, dynamic>> rows) {
+    final now = DateTime.now();
 
-  List<double> dailyIncome = List.filled(24, 0);
-  List<double> dailyExpense = List.filled(24, 0);
+    void addToBucket(int idx, Map<String, dynamic> r) {
+      final amt = _amount(r["amount"]);
+      final type = (r["type"] ?? "").toString();
 
-  List<double> yearlyIncome = List.filled(12, 0);
-  List<double> yearlyExpense = List.filled(12, 0);
+      if (_isIncome(type)) netBuckets[idx] += amt;
+      if (_isExpense(type)) {
+        netBuckets[idx] -= amt;
+        spendBuckets[idx] += amt;
+      }
+    }
 
-  void buildChart(List<QueryDocumentSnapshot> docs) {
-    // Reset dulu
-    dailyIncome = List.filled(24, 0);
-    dailyExpense = List.filled(24, 0);
+    if (filter == "Daily") {
+      netBuckets = List.filled(24, 0);
+      spendBuckets = List.filled(24, 0);
 
-    weeklyIncome = List.filled(7, 0);
-    weeklyExpense = List.filled(7, 0);
-
-    monthlyIncome = List.filled(31, 0);
-    monthlyExpense = List.filled(31, 0);
-
-    yearlyIncome = List.filled(12, 0);
-    yearlyExpense = List.filled(12, 0);
-
-    DateTime now = DateTime.now();
-
-    for (var d in docs) {
-      DateTime dt = DateTime.parse(d["date"]);
-      double amount = double.tryParse(d["amount"].toString()) ?? 0;
-      bool isIncome = d["type"] == "income";
-
-      // DAILY
-      if (filter == "Daily") {
+      for (final r in rows) {
+        final dt = _dt(r);
+        if (dt == null) continue;
         if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
-          if (isIncome) dailyIncome[dt.hour] += amount;
-          else dailyExpense[dt.hour] += amount;
+          addToBucket(dt.hour, r);
         }
       }
+      return;
+    }
 
-      // WEEKLY
-      else if (filter == "Weekly") {
-        int i = dt.weekday % 7;
-        if (isIncome) weeklyIncome[i] += amount;
-        else weeklyExpense[i] += amount;
-      }
+    if (filter == "Weekly") {
+      netBuckets = List.filled(7, 0);
+      spendBuckets = List.filled(7, 0);
 
-      // MONTHLY
-      else if (filter == "Monthly") {
-        if (dt.year == now.year && dt.month == now.month) {
-          int i = dt.day - 1;
-          if (isIncome) monthlyIncome[i] += amount;
-          else monthlyExpense[i] += amount;
+      final baseDay = DateTime(now.year, now.month, now.day);
+      final startOfWeek = baseDay.subtract(Duration(days: baseDay.weekday - 1)); // Mon
+      final end = startOfWeek.add(const Duration(days: 7));
+
+      for (final r in rows) {
+        final dt = _dt(r);
+        if (dt == null) continue;
+        if (!dt.isBefore(startOfWeek) && dt.isBefore(end)) {
+          final idx = dt.weekday - 1;
+          addToBucket(idx, r);
         }
       }
+      return;
+    }
 
-      // YEAR
-      else if (filter == "Year") {
-        if (dt.year == now.year) {
-          int i = dt.month - 1;
-          if (isIncome) yearlyIncome[i] += amount;
-          else yearlyExpense[i] += amount;
+    if (filter == "Monthly") {
+      // fixed 30 bar (1..30)
+      netBuckets = List.filled(30, 0);
+      spendBuckets = List.filled(30, 0);
+
+      final start = DateTime(now.year, now.month, 1);
+      final end = DateTime(now.year, now.month + 1, 1);
+
+      for (final r in rows) {
+        final dt = _dt(r);
+        if (dt == null) continue;
+        if (!dt.isBefore(start) && dt.isBefore(end)) {
+          final day = dt.day;
+          if (day >= 1 && day <= 30) {
+            addToBucket(day - 1, r);
+          }
         }
+      }
+      return;
+    }
+
+    // Year
+    netBuckets = List.filled(12, 0);
+    spendBuckets = List.filled(12, 0);
+
+    final start = DateTime(now.year, 1, 1);
+    final end = DateTime(now.year + 1, 1, 1);
+
+    for (final r in rows) {
+      final dt = _dt(r);
+      if (dt == null) continue;
+      if (!dt.isBefore(start) && dt.isBefore(end)) {
+        addToBucket(dt.month - 1, r);
       }
     }
   }
 
-  // ------------------------ BAR GROUP BUILDER ------------------------
-  List<BarChartGroupData> getBarGroups() {
-    if (filter == "Daily") {
-      return List.generate(24, (i) {
-        return BarChartGroupData(
-          x: i,
-          barRods: [
-            BarChartRodData(toY: dailyIncome[i], width: 6),
-            BarChartRodData(toY: dailyExpense[i], width: 6),
-          ],
-        );
-      });
+  // ===== Chart helpers =====
+  double _absMax(List<double> arr) {
+    double mx = 0;
+    for (final v in arr) {
+      if (v.abs() > mx) mx = v.abs();
     }
+    return mx <= 0 ? 10 : mx * 1.2;
+  }
 
-    if (filter == "Weekly") {
-      return List.generate(7, (i) {
-        return BarChartGroupData(
-          x: i,
-          barRods: [
-            BarChartRodData(toY: weeklyIncome[i], width: 7),
-            BarChartRodData(toY: weeklyExpense[i], width: 7),
-          ],
-        );
-      });
+  double _minYNet() {
+    double mn = 0;
+    for (final v in netBuckets) {
+      if (v < mn) mn = v;
     }
+    if (mn >= 0) return 0;
+    return mn * 1.2;
+  }
 
-    if (filter == "Monthly") {
-      return List.generate(31, (i) {
-        return BarChartGroupData(
-          x: i,
-          barRods: [
-            BarChartRodData(toY: monthlyIncome[i], width: 4),
-            BarChartRodData(toY: monthlyExpense[i], width: 4),
-          ],
-        );
-      });
+  double _maxYNet() => _absMax(netBuckets);
+  double _maxYSpend() {
+    double mx = 0;
+    for (final v in spendBuckets) {
+      if (v > mx) mx = v;
     }
+    return mx <= 0 ? 10 : mx * 1.2;
+  }
 
-    return List.generate(12, (i) {
+  double _chartWidth() {
+    if (filter == "Daily") return 24 * 22;
+    if (filter == "Weekly") return 7 * 44;
+    if (filter == "Monthly") return 30 * 10;
+    return 12 * 5;
+  }
+
+  List<BarChartGroupData> _groups(List<double> data) {
+    return List.generate(data.length, (i) {
       return BarChartGroupData(
         x: i,
         barRods: [
-          BarChartRodData(toY: yearlyIncome[i], width: 8),
-          BarChartRodData(toY: yearlyExpense[i], width: 8),
+          BarChartRodData(
+            toY: data[i],
+            width: 14,
+            borderRadius: BorderRadius.circular(6),
+          ),
         ],
       );
     });
   }
 
-  // ------------------------ LABEL BUILDER ------------------------
-  Widget buildBottomTitle(double value, TitleMeta meta) {
+  Widget _bottomTitle(double value, TitleMeta meta) {
+    final i = value.toInt();
+
     if (filter == "Daily") {
-      if (value % 3 != 0) return const SizedBox();
-      return Text("${value.toInt()}h");
+      if (i % 2 != 0) return const SizedBox.shrink();
+      return Text("${i}h", style: const TextStyle(fontSize: 10));
     }
 
     if (filter == "Weekly") {
       const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      return Text(days[value.toInt()]);
+      if (i < 0 || i > 6) return const SizedBox.shrink();
+      return Text(days[i], style: const TextStyle(fontSize: 10));
     }
 
     if (filter == "Monthly") {
-      if (value % 3 != 0) return const SizedBox();
-      return Text("${value.toInt() + 1}");
+      if ((i + 1) % 5 != 0) return const SizedBox.shrink();
+      return Text("${i + 1}", style: const TextStyle(fontSize: 10));
     }
 
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return Text(months[value.toInt()]);
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    if (i < 0 || i > 11) return const SizedBox.shrink();
+    return Text(months[i], style: const TextStyle(fontSize: 10));
   }
 
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xffF5F6FA),
-      body: StreamBuilder(
-        stream: getTransactions(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
-          var docs = snapshot.data!.docs;
-          final totals = calculateTotals(docs);
-          buildChart(docs); // update grafik setiap snapshot
-          double calculateChartWidth() {
-            if (filter == "Daily") return 24 * 30;   // 24 bar
-            if (filter == "Weekly") return 7 * 40;   // 7 bar
-            if (filter == "Monthly") return 31 * 25; // 31 bar
-            return 12 * 40;                          // 12 months
-          }
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 20),
-                const Text("Analysis",
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-
-                const SizedBox(height: 20),
-
-                // BALANCE
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _totalCard("Total Balance", totals["balance"], Colors.green),
-                    _totalCard("Total Expense", totals["expense"], Colors.red),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                // FILTER BUTTONS
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _filterButton("Daily"),
-                    _filterButton("Weekly"),
-                    _filterButton("Monthly"),
-                    _filterButton("Year"),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                // ----------------- CHART -----------------
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.yellow.shade300,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Income & Expenses",
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 20),
-
-                      SizedBox(
-                        height: 230,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: SizedBox(
-                            width: calculateChartWidth(),   // <- otomatis lebar sesuai jumlah data
-                            child: BarChart(
-                              BarChartData(
-                                barGroups: getBarGroups(),
-                                titlesData: FlTitlesData(
-                                  bottomTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      getTitlesWidget: buildBottomTitle,
-                                      reservedSize: 30,
-                                    ),
-                                  ),
-                                  leftTitles: AxisTitles(
-                                    sideTitles: SideTitles(showTitles: true),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    ],
-                  ),
-                ),
-
-                // ------------------- (WIDGET LAIN JANGAN DIUBAH) -------------------
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _summary("Income", totals["income"], Icons.arrow_upward),
-                    _summary("Expense", totals["expense"], Icons.arrow_downward),
-                  ],
-                ),
-
-                const SizedBox(height: 30),
-                const Text("My Targets",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 20),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _targetCircle("Travel", 0.30, Colors.blue),
-                    _targetCircle("Car", 0.50, Colors.blueAccent),
-                  ],
-                ),
-
-                const SizedBox(height: 50),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ====================================================================================
-  // ========================   WIDGETS DI BAWAH TIDAK DIUBAH   ==========================
-  // ====================================================================================
-
-  Widget _filterButton(String name) {
-    bool active = filter == name;
-    return GestureDetector(
+  Widget _chip(String name) {
+    final active = filter == name;
+    return InkWell(
       onTap: () => setState(() => filter = name),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? Colors.blue : Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          color: active ? const Color(0xFF5338FF) : const Color(0xFFF2F3F7),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           name,
           style: TextStyle(
-              color: active ? Colors.white : Colors.black, fontSize: 14),
+            color: active ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
         ),
       ),
     );
   }
 
-  Widget _totalCard(String title, double value, Color color) {
+  Widget _tab(String text, int idx) {
+    final active = tabIndex == idx;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => tabIndex = idx),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFF5338FF) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: active ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _metricCard({required String title, required double value, required IconData icon}) {
     return Container(
-      width: 150,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(blurRadius: 14, offset: Offset(0, 6), color: Color(0x12000000)),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(title,
-              style: const TextStyle(fontSize: 14, color: Colors.black54)),
-          const SizedBox(height: 4),
-          Text(
-            "Rp${value.toStringAsFixed(0)}",
-            style: TextStyle(
-                fontSize: 20, fontWeight: FontWeight.bold, color: color),
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF2F3F7),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: const Color(0xFF5338FF)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                const SizedBox(height: 6),
+                Text(
+                  "Rp${value.toStringAsFixed(0)}",
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _summary(String name, double value, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, size: 30, color: Colors.blue),
-        const SizedBox(height: 4),
-        Text(name,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        Text("Rp${value.toStringAsFixed(0)}",
-            style: const TextStyle(fontSize: 16)),
-      ],
+  Widget _chartCard({
+    required String title,
+    required List<double> data,
+    required double maxY,
+    double? minY,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.yellow,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(blurRadius: 14, offset: Offset(0, 6), color: Color(0x12000000)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 260,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width),
+                child: SizedBox(
+                  width: _chartWidth(),
+                  child: BarChart(
+                    BarChartData(
+                      minY: minY,
+                      maxY: maxY,
+                      barGroups: _groups(data),
+                      borderData: FlBorderData(show: false),
+                      gridData: const FlGridData(show: true),
+                      titlesData: FlTitlesData(
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 44,
+                            getTitlesWidget: (v, meta) =>
+                                Text(v.toInt().toString(), style: const TextStyle(fontSize: 10)),
+                          ),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 28,
+                            getTitlesWidget: _bottomTitle,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+        ],
+      ),
     );
   }
 
-  Widget _targetCircle(String name, double percent, Color color) {
-    return Column(
-      children: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox(
-              width: 110,
-              height: 110,
-              child: CircularProgressIndicator(
-                value: percent,
-                strokeWidth: 10,
-                color: color,
-                backgroundColor: Colors.grey.shade300,
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xffF5F6FA),
+      body: SafeArea(
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: getTransactions(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text("Firestore error: ${snapshot.error}"));
+            }
+
+            final rows = (snapshot.data?.docs ?? []).map((d) => d.data()).toList();
+            final totals = _totals(rows);
+
+            _buildBuckets(rows);
+
+            final isNet = tabIndex == 0;
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Analysis",
+                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 14),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _metricCard(
+                              title: "Balance",
+                              value: totals["balance"] ?? 0,
+                              icon: Icons.account_balance_wallet,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _metricCard(
+                              title: "Spend",
+                              value: totals["expense"] ?? 0,
+                              icon: Icons.trending_down,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Filter (Daily/Weekly/Monthly/Year)
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.yellow.shade300,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: const [
+                            BoxShadow(blurRadius: 14, offset: Offset(0, 6), color: Color(0x12000000)),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _chip("Daily"),
+                            _chip("Weekly"),
+                            _chip("Monthly"),
+                            _chip("Year"),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Tabs (Net / Spend)
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: const [
+                            BoxShadow(blurRadius: 14, offset: Offset(0, 6), color: Color(0x12000000)),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            _tab("Balance (Net)", 0),
+                            _tab("Spend", 1),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Chart
+                      if (isNet)
+                        _chartCard(
+                          title: "Balance (Net = Income - Spend)",
+                          data: netBuckets,
+                          minY: _minYNet(),
+                          maxY: _maxYNet(),
+                        )
+                      else
+                        _chartCard(
+                          title: "Spend (Expense Only)",
+                          data: spendBuckets,
+                          maxY: _maxYSpend(),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            Text("${(percent * 100).toInt()}%",
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
+            );
+          },
         ),
-        const SizedBox(height: 8),
-        Text(name, style: const TextStyle(fontSize: 14)),
-      ],
+      ),
     );
   }
 }
-
-// import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:fl_chart/fl_chart.dart';
-// import 'package:flutter/material.dart';
-// import 'package:intl/intl.dart';
-//
-// class StatisticScreen extends StatefulWidget {
-//   const StatisticScreen({super.key});
-//
-//   @override
-//   State<StatisticScreen> createState() => _StatisticScreenState();
-// }
-//
-// class _StatisticScreenState extends State<StatisticScreen> {
-//   int selectedMonth = DateTime.now().month;
-//   int selectedYear = DateTime.now().year;
-//
-//   bool isLoading = true;
-//   List<Map<String, dynamic>> transactions = [];
-//
-//   @override
-//   void initState() {
-//     super.initState();
-//     loadTransactions();
-//   }
-//
-//   Future<void> loadTransactions() async {
-//     setState(() => isLoading = true);
-//
-//     // Ambil awal & akhir bulan
-//     DateTime start = DateTime(selectedYear, selectedMonth, 1);
-//     DateTime end = DateTime(selectedYear, selectedMonth + 1, 1);
-//
-//     final snapshot = await FirebaseFirestore.instance
-//         .collection('transactions')
-//         .where('timestamp', isGreaterThanOrEqualTo: start)
-//         .where('timestamp', isLessThan: end)
-//         .get();
-//
-//     transactions = snapshot.docs.map((doc) {
-//       final d = doc.data();
-//
-//       return {
-//         'id': doc.id,
-//         'type': d['type'],
-//         'amount': (d['amount'] as num).toDouble(),
-//         'category': d['category'],
-//         'note': d['note'] ?? '',
-//         'date': (d['timestamp'] as Timestamp).toDate(),
-//       };
-//     }).toList();
-//
-//     setState(() => isLoading = false);
-//   }
-//
-//   // --- SUMMARY TOTAL ---
-//   double get totalIncome => transactions
-//       .where((e) => e['type'] == 'income')
-//       .fold(0.0, (p, e) => p + e['amount']);
-//
-//   double get totalSpending => transactions
-//       .where((e) => e['type'] == 'spend')
-//       .fold(0.0, (p, e) => p + e['amount']);
-//
-//   // --- GROUP KATEGORI SPENDING ---
-//   Map<String, double> get spendingByCategory {
-//     Map<String, double> result = {};
-//
-//     for (var t in transactions.where((e) => e['type'] == 'spend')) {
-//       result[t['category']] =
-//           (result[t['category']] ?? 0) + t['amount'];
-//     }
-//
-//     return result;
-//   }
-//
-//   // --- DATA BAR CHART ---
-//   double weekSum(int weekIndex, String type) {
-//     DateTime start = DateTime(selectedYear, selectedMonth, 1 + (weekIndex * 7));
-//     DateTime end = start.add(const Duration(days: 7));
-//
-//     return transactions
-//         .where((e) =>
-//     e['type'] == type &&
-//         (e['date'] as DateTime).isAfter(start) &&
-//         (e['date'] as DateTime).isBefore(end))
-//         .fold(0.0, (p, e) => p + e['amount']);
-//   }
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       backgroundColor: const Color(0xFF392DD2),
-//       body: SafeArea(
-//         child: Column(
-//           children: [
-//             // HEADER
-//             Padding(
-//               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-//               child: Row(
-//                 children: [
-//                   GestureDetector(
-//                     onTap: () => Navigator.pop(context),
-//                     child: const Icon(Icons.arrow_back, color: Colors.white),
-//                   ),
-//                   const SizedBox(width: 12),
-//                   const Text(
-//                     "Statistics",
-//                     style: TextStyle(
-//                         color: Colors.white,
-//                         fontSize: 20,
-//                         fontWeight: FontWeight.bold),
-//                   ),
-//                   const Spacer(),
-//                 ],
-//               ),
-//             ),
-//
-//             // --- MONTH SELECTOR ---
-//             Padding(
-//               padding: const EdgeInsets.symmetric(horizontal: 20),
-//               child: Row(
-//                 children: [
-//                   DropdownButton<int>(
-//                     value: selectedMonth,
-//                     dropdownColor: Colors.white,
-//                     items: List.generate(
-//                       12,
-//                           (i) => DropdownMenuItem(
-//                         value: i + 1,
-//                         child: Text(DateFormat('MMMM').format(DateTime(0, i + 1))),
-//                       ),
-//                     ),
-//                     onChanged: (v) {
-//                       selectedMonth = v!;
-//                       loadTransactions();
-//                     },
-//                   ),
-//                   const SizedBox(width: 10),
-//                   DropdownButton<int>(
-//                     value: selectedYear,
-//                     dropdownColor: Colors.white,
-//                     items: List.generate(
-//                       5,
-//                           (i) => DropdownMenuItem(
-//                         value: 2023 + i,
-//                         child: Text((2023 + i).toString()),
-//                       ),
-//                     ),
-//                     onChanged: (v) {
-//                       selectedYear = v!;
-//                       loadTransactions();
-//                     },
-//                   ),
-//                 ],
-//               ),
-//             ),
-//
-//             const SizedBox(height: 10),
-//
-//             Expanded(
-//               child: Container(
-//                 width: double.infinity,
-//                 padding: const EdgeInsets.all(18),
-//                 decoration: const BoxDecoration(
-//                   color: Colors.white,
-//                   borderRadius:
-//                   BorderRadius.vertical(top: Radius.circular(35)),
-//                 ),
-//                 child: isLoading
-//                     ? const Center(child: CircularProgressIndicator())
-//                     : buildContent(),
-//               ),
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-//
-//   Widget buildContent() {
-//     return SingleChildScrollView(
-//       child: Column(
-//         children: [
-//           // --- SUMMARY CARD ---
-//           Container(
-//             padding: const EdgeInsets.all(16),
-//             decoration: BoxDecoration(
-//               color: const Color(0xFF392DD2),
-//               borderRadius: BorderRadius.circular(16),
-//             ),
-//             child: Column(
-//               children: [
-//                 Text("Balance",
-//                     style: const TextStyle(color: Colors.white70)),
-//                 Text(
-//                   NumberFormat('#,###', 'id')
-//                       .format((totalIncome - totalSpending).round()),
-//                   style: const TextStyle(
-//                       color: Colors.white,
-//                       fontWeight: FontWeight.bold,
-//                       fontSize: 28),
-//                 ),
-//                 const SizedBox(height: 10),
-//                 Row(
-//                   mainAxisAlignment: MainAxisAlignment.spaceAround,
-//                   children: [
-//                     Column(
-//                       children: [
-//                         const Text("Income",
-//                             style: TextStyle(color: Colors.white)),
-//                         Text(
-//                           "+${NumberFormat('#,###', 'id').format(totalIncome.round())}",
-//                           style: const TextStyle(
-//                               color: Colors.greenAccent, fontSize: 18),
-//                         ),
-//                       ],
-//                     ),
-//                     Column(
-//                       children: [
-//                         const Text("Spending",
-//                             style: TextStyle(color: Colors.white)),
-//                         Text(
-//                           "-${NumberFormat('#,###', 'id').format(totalSpending.round())}",
-//                           style: const TextStyle(
-//                               color: Colors.redAccent, fontSize: 18),
-//                         ),
-//                       ],
-//                     ),
-//                   ],
-//                 ),
-//               ],
-//             ),
-//           ),
-//
-//           const SizedBox(height: 25),
-//
-//           // =========================
-//           //       PIE CHART
-//           // =========================
-//           if (spendingByCategory.isNotEmpty) ...[
-//             const Text("Spending by Category",
-//                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-//             const SizedBox(height: 12),
-//             SizedBox(
-//               height: 240,
-//               child: PieChart(
-//                 PieChartData(
-//                   sections: spendingByCategory.entries.map((e) {
-//                     return PieChartSectionData(
-//                       value: e.value,
-//                       title:
-//                       "${((e.value / totalSpending) * 100).round()}%",
-//                       radius: 55,
-//                     );
-//                   }).toList(),
-//                 ),
-//               ),
-//             ),
-//
-//             const SizedBox(height: 25),
-//           ],
-//
-//           // =========================
-//           //      BAR CHART
-//           // =========================
-//           const Text("Weekly Summary",
-//               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-//           const SizedBox(height: 10),
-//
-//           SizedBox(
-//             height: 220,
-//             child: BarChart(
-//               BarChartData(
-//                 barGroups: List.generate(4, (i) {
-//                   final incomeVal = weekSum(i, 'income');
-//                   final spendVal = weekSum(i, 'spend');
-//
-//                   return BarChartGroupData(
-//                     x: i,
-//                     barRods: [
-//                       BarChartRodData(toY: incomeVal, width: 12),
-//                       BarChartRodData(toY: spendVal, width: 12),
-//                     ],
-//                   );
-//                 }),
-//               ),
-//             ),
-//           ),
-//
-//           const SizedBox(height: 30),
-//         ],
-//       ),
-//     );
-//   }
-// }

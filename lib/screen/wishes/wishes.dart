@@ -1,8 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:budgetin_app/screen/wishes/add_wishes.dart';
 import 'package:budgetin_app/screen/wishes/detailWishes.dart';
-import 'dart:io';
+
 class WishesScreen extends StatefulWidget {
   const WishesScreen({super.key});
 
@@ -35,17 +36,18 @@ class _WishesScreenState extends State<WishesScreen> {
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
-                    .collection('wishes') // 🔥 FIX DISINI
+                    .collection('wishes')
+                    .orderBy('createdAt', descending: true)
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
-
                   if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
+                    return Center(
+                      child: Text("Error: ${snapshot.error}"),
+                    );
                   }
-
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return const Center(
                       child: Text(
@@ -55,45 +57,39 @@ class _WishesScreenState extends State<WishesScreen> {
                     );
                   }
 
-                  final docs = snapshot.data!.docs;
+                  final wishes = snapshot.data!.docs;
 
                   return ListView.builder(
-                    itemCount: docs.length,
+                    itemCount: wishes.length,
                     itemBuilder: (context, index) {
-                      final doc = docs[index];
-                      final data = doc.data() as Map<String, dynamic>;
+                      final wishDoc = wishes[index];
+                      final data = wishDoc.data() as Map<String, dynamic>;
 
-                      final title = data['name'] ?? 'No Name';
-                      final image = data['imagePath'] ?? '';
-                      final colorHex = data['color'] ?? '#FFFFFF';
-                      final amount = data['amount'] ?? 0;
+                      final title = (data['name'] ?? 'No Name').toString();
+                      final imagePath = (data['imagePath'] ?? '').toString();
+                      final colorHex = (data['color'] ?? '#FFFFFFFF').toString();
 
-                      final savedAmount = data['savedAmount'] ?? 0;
+                      final targetAmount = (data['amount'] as num? ?? 0).toDouble();
+                      final savedAmount = (data['savedAmount'] as num? ?? 0).toDouble();
 
-                      double progress = amount == 0 ? 0 : savedAmount / amount;
-                      int percentage = (progress * 100).clamp(0, 100).round();
-                      int saved = savedAmount;
-
+                      final progress = targetAmount <= 0 ? 0.0 : (savedAmount / targetAmount);
+                      final percentage = (progress * 100).clamp(0, 100).round();
 
                       return GestureDetector(
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => DetailWishesScreen(
-                                wishId: doc.id,
-                              ),
+                              builder: (context) => DetailWishesScreen(wishId: wishDoc.id),
                             ),
                           );
                         },
                         child: _buildWishCard(
                           title: title,
-                          imageAsset: image,
-                          saved: saved,
+                          imagePathOrUrl: imagePath,
+                          saved: savedAmount.toInt(),
                           percentage: percentage,
-                          cardColor: Color(
-                            int.parse(colorHex.replaceFirst('#', '0xFF')),
-                          ),
+                          cardColor: _parseHexColor(colorHex, fallback: const Color(0xFFFFFFFF)),
                         ),
                       );
                     },
@@ -101,31 +97,30 @@ class _WishesScreenState extends State<WishesScreen> {
                 },
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             ElevatedButton.icon(
               onPressed: () async {
                 await Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const AddWishesScreen()),
+                  MaterialPageRoute(builder: (_) => const AddWishesScreen()),
                 );
               },
               icon: const Icon(Icons.add, color: Colors.white),
               label: const Text(
-                "add",
+                "Add Wish",
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
                   color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15),
                 ),
-                elevation: 5,
               ),
             ),
           ],
@@ -134,101 +129,74 @@ class _WishesScreenState extends State<WishesScreen> {
     );
   }
 
+  // ---------- UI CARD ----------
   Widget _buildWishCard({
     required String title,
-    required String imageAsset,
+    required String imagePathOrUrl,
     required int saved,
     required int percentage,
     required Color cardColor,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16.0),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
           BoxShadow(
             color: Color.fromARGB(25, 128, 128, 128),
-            spreadRadius: 2,
             blurRadius: 5,
+            spreadRadius: 2,
             offset: Offset(0, 3),
-          ),
+          )
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // TITLE
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                Icon(Icons.more_horiz, color: Colors.grey.shade700, size: 30),
-              ],
-            ),
-          ),
-
-          Center(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(15),
-                child: imageAsset.isNotEmpty
-                    ? (imageAsset.startsWith('/storage') || imageAsset.startsWith('/data')
-                    ? Image.file(
-                  File(imageAsset),
-                  width: double.infinity,
-                  height: 150,
-                  fit: BoxFit.cover,
-                )
-                    : Image.network(
-                  imageAsset,
-                  width: double.infinity,
-                  height: 150,
-                  fit: BoxFit.cover,
-                ))
-                    : Container(
-                  height: 150,
-                  color: Colors.grey.shade300,
-                  child: const Icon(Icons.image_not_supported, size: 40),
-                ),
-
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
               ),
             ),
           ),
 
-          const SizedBox(height: 16),
+          // IMAGE (FIXED)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: _buildWishImage(imagePathOrUrl),
+          ),
 
+          const SizedBox(height: 15),
+
+          // INFO
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   "Terkumpul : Rp ${_formatNumber(saved)}",
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 16,
-                    color: Colors.grey.shade800,
                     fontWeight: FontWeight.w500,
+                    color: Colors.black87,
                   ),
                 ),
                 Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: Colors.blue.shade100,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    "$percentage %",
+                    "$percentage%",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -242,15 +210,16 @@ class _WishesScreenState extends State<WishesScreen> {
 
           const SizedBox(height: 12),
 
+          // PROGRESS
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: LinearProgressIndicator(
                 value: percentage / 100,
+                minHeight: 12,
                 backgroundColor: Colors.grey.shade300,
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
-                minHeight: 12,
               ),
             ),
           ),
@@ -261,10 +230,92 @@ class _WishesScreenState extends State<WishesScreen> {
     );
   }
 
+  // ---------- IMAGE BUILDER (FIX UTAMA) ----------
+  Widget _buildWishImage(String pathOrUrl) {
+    const double h = 150;
+
+    if (pathOrUrl.trim().isEmpty) {
+      return _placeholderImage(h);
+    }
+
+    // URL (kalau nanti kamu pakai Firebase Storage downloadURL)
+    if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+      return Image.network(
+        pathOrUrl,
+        width: double.infinity,
+        height: h,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _placeholderImage(h),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return SizedBox(
+            height: h,
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        },
+      );
+    }
+
+    // LOCAL FILE PATH
+    final file = File(pathOrUrl);
+
+    // Penting: cek dulu file benar2 ada (karena kamu simpan path cache)
+    if (!file.existsSync()) {
+      return _placeholderImage(h, label: "Gambar tidak ditemukan (cache terhapus)");
+    }
+
+    return Image.file(
+      file,
+      width: double.infinity,
+      height: h,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => _placeholderImage(h),
+    );
+  }
+
+  Widget _placeholderImage(double height, {String? label}) {
+    return Container(
+      width: double.infinity,
+      height: height,
+      color: Colors.grey.shade300,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.image_not_supported, size: 40),
+            if (label != null) ...[
+              const SizedBox(height: 6),
+              Text(label, style: const TextStyle(fontSize: 12), textAlign: TextAlign.center),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------- HELPERS ----------
+  Color _parseHexColor(String hex, {required Color fallback}) {
+    try {
+      var value = hex.trim();
+
+      if (value.startsWith('#')) value = value.substring(1);
+
+      // kalau formatnya RRGGBB, tambah alpha FF
+      if (value.length == 6) value = 'FF$value';
+
+      // harus 8 char AARRGGBB
+      if (value.length != 8) return fallback;
+
+      return Color(int.parse(value, radix: 16));
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   String _formatNumber(int number) {
     return number.toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]}.',
+          (m) => "${m[1]}.",
     );
   }
 }

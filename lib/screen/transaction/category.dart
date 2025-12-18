@@ -89,7 +89,7 @@ class CategoryPage extends StatelessWidget {
                           onTap: () async {
                             final result = await Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => AddTransactionPage(category: item['name'], type: type)),
+                              MaterialPageRoute(builder: (_) => AddTransactionPage(category: item['name'], type: type, icon: item['icon'], )),
                             );
                             if (result == true) {
                               Navigator.pop(context, true);

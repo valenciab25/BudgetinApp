@@ -21,7 +21,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
       // Pilih salah satu rute yang benar, misalnya '/home' atau '/login'
       // Saya memilih '/home' berdasarkan salah satu cabang konflik sebelumnya
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushReplacementNamed(context, '/login');
     });
   }
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'add_transaction_page.dart';
+import 'package:budgetin_app/screen/transaction/add_transaction_page.dart';
 
 class AddIncomeScreen extends StatelessWidget {
   const AddIncomeScreen({super.key});
@@ -78,14 +78,15 @@ class CategoryTile extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => AddTransactionPage(
+              icon: icon,        // ✅ INI YANG KURANG
               category: title,
-              type: "income", // PENTING: ini penanda income
+              type: "income",
             ),
           ),
         );
 
-        if (result == true) {
-          Navigator.pop(context, true); // refresh halaman sebelumnya
+        if (result == true && context.mounted) {
+          Navigator.pop(context, true);
         }
       },
     );

@@ -2,57 +2,76 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
-  // 1. Membuat objek _auth untuk mengakses layanan autentikasi Firebase
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // 2. Membuat objek _googleSignIn untuk berinteraksi ke server Google
-  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
-
-  // Fungsi login yang bersifat 'Future' karena prosesnya butuh waktu (asynchronous).
-  // Mengembalikan objek User jika berhasil, atau null jika gagal.
+  // ---------------- GOOGLE SIGN IN ----------------
   Future<User?> signInWithGoogle() async {
     try {
-      // 3. Menginisialisasi sistem login Google sebelum digunakan
-      await _googleSignIn.initialize();
-
-      // 4. Membuka jendela (pop-up) login Google dan menunggu siswa memilih akun.
-      // Jika user menutup jendela/batal, baris ini akan melempar error (masuk ke catch).
-      final GoogleSignInAccount googleUser = await _googleSignIn.authenticate();
-
-      // 5. Mengambil token keamanan (ID Token & Access Token) dari akun Google yang dipilih tadi.
-      // Token ini ibarat KTP yang membuktikan akun tersebut asli.
-      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
-
-      // 6. Membuat "Surat Jalan" (Credential) untuk diserahkan ke Firebase.
-      // Kita menukar token dari Google menjadi format yang dimengerti oleh Firebase.
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
+      // 1. GoogleSignIn instance
+      final googleSignIn = GoogleSignIn(
+        scopes: ['email'],
       );
 
-      // 7. Proses Login Final: Menyerahkan credential ke Firebase.
-      // Firebase akan memverifikasi, lalu membuat sesi login di aplikasi kita.
-      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      // 2. Pilih akun
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return null;
 
-      // Jika sukses sampai sini, kembalikan data User (nama, email, foto, uid) ke pemanggil fungsi.
+      // 3. Ambil authentication (ACCESS TOKEN + ID TOKEN)
+      final googleAuth = await googleUser.authentication;
+
+      // 4. Buat credential Firebase
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+        accessToken: googleAuth.accessToken,
+      );
+
+      // 5. Login ke Firebase
+      final userCredential =
+      await _auth.signInWithCredential(credential);
+
       return userCredential.user;
-
-    } on FirebaseAuthException catch (e) {
-      // Menangkap error spesifik dari Firebase (Contoh: Koneksi internet putus, atau konfigurasi SHA-1 salah).
-      print("Firebase Auth Error: ${e.message}");
-      return null; // Kembalikan null karena login gagal.
     } catch (e) {
-      // Menangkap error umum, termasuk jika menekan tombol 'Back' atau batal memilih akun.
-      print("Google Sign-In Error / Cancelled: $e");
-      return null; // Kembalikan null karena login gagal.
+      print("GOOGLE SIGN IN ERROR: $e");
+      return null;
     }
   }
 
-  // Fungsi untuk Logout (Keluar Akun)
-  Future<void> signOut() async {
-    // Memutuskan koneksi dengan Google agar saat login lagi, bisa memilih akun berbeda.
-    await _googleSignIn.disconnect();
+  // ---------------- EMAIL LOGIN ----------------
+  Future<User?> loginEmail(String email, String password) async {
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return credential.user;
+    } catch (e) {
+      print("EMAIL LOGIN ERROR: $e");
+      rethrow;
+    }
+  }
 
-    // Menghapus sesi login dari Firebase Auth di aplikasi.
-    await _auth.signOut();
+  // ---------------- EMAIL REGISTER ----------------
+  Future<User?> registerEmail(String email, String password) async {
+    try {
+      final credential =
+      await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return credential.user;
+    } catch (e) {
+      print("EMAIL REGISTER ERROR: $e");
+      rethrow;
+    }
+  }
+
+  // ---------------- LOGOUT ----------------
+  Future<void> signOut() async {
+    try {
+      await _auth.signOut();
+      await GoogleSignIn().signOut();
+    } catch (e) {
+      print("SIGN OUT ERROR: $e");
+    }
   }
 }
